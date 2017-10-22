@@ -22,7 +22,7 @@ local zlib = require("zlib")
 
 	zlib.createDeflate([default: DeflateOptions]) return DeflateObject
 
-  可只指定部分参数或都不指定(使用默认)
+	  可只指定部分参数或都不指定(使用默认)
   
 	  DeflateOptions {
 	      level (Z_DEFAULT_COMPRESSION)
@@ -39,7 +39,7 @@ local zlib = require("zlib")
 
 	zlib.createInflate([default: InflateOptions]) return InflateObject
 
-  可只指定部分参数或都不指定(使用默认)
+  	可只指定部分参数或都不指定(使用默认)
   
 	  InflateOptions {
 	    windowBits (15)
@@ -53,7 +53,7 @@ local zlib = require("zlib")
 
   添加压缩或解压数据：数据
   
-    会写入缓冲区，并不一定马上会做出操作，所以可能会返回nil
+    	会写入缓冲区，并不一定马上会做出操作，所以可能会返回nil
     
     	(DeflateObject|InflateObject):write (string) return string([nil 或 解(压)缩后数据]) , error(错误代码)
   
@@ -65,13 +65,11 @@ local zlib = require("zlib")
   
   结束压缩或解压数据: 数据
   
-  
-    刷新缓冲区，返回数据 ， 解压数据可以不需要调用，但如果需要验证数据是否完成可以调用
-    
-    
+    	刷新缓冲区，返回数据 ， 解压数据可以不需要调用，但如果需要验证数据是否完成可以调用
+	
 		(DeflateObject|InflateObject):end (string) return string([nil 或 解(压)缩后数据]) , error(错误代码)
-   
-   
+
+
 		zlib.constants {
 
 		刷新方式: （flush）
