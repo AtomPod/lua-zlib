@@ -70,7 +70,8 @@ local zlib = require("zlib")
 			(DeflateObject|InflateObject):end (string) return string([nil 或 解(压)缩后数据]) , error(错误代码)
 
 常量:
-		zlib.constants {
+
+	zlib.constants = {
 
 		刷新方式: （flush）
 
