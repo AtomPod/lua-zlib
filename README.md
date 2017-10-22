@@ -51,25 +51,25 @@ local zlib = require("zlib")
 
 压缩解压对象函数:
 
-  添加压缩或解压数据：数据
-  
-    	会写入缓冲区，并不一定马上会做出操作，所以可能会返回nil
-    
-    	(DeflateObject|InflateObject):write (string) return string([nil 或 解(压)缩后数据]) , error(错误代码)
-  
-  
-  强制刷新缓冲区： 刷新类型
-  
-    	(DeflateObject|InflateObject):flush ([default: Z_FULL_FLUSH])  return string([nil 或 解(压)缩后数据]) , error(错误代码)
-  
-  
-  结束压缩或解压数据: 数据
-  
-    	刷新缓冲区，返回数据 ， 解压数据可以不需要调用，但如果需要验证数据是否完成可以调用
-	
-		(DeflateObject|InflateObject):end (string) return string([nil 或 解(压)缩后数据]) , error(错误代码)
+	  添加压缩或解压数据：数据
+
+		会写入缓冲区，并不一定马上会做出操作，所以可能会返回nil
+
+		(DeflateObject|InflateObject):write (string) return string([nil 或 解(压)缩后数据]) , error(错误代码)
 
 
+	  强制刷新缓冲区： 刷新类型
+
+		(DeflateObject|InflateObject):flush ([default: Z_FULL_FLUSH])  return string([nil 或 解(压)缩后数据]) , error(错误代码)
+
+
+	  结束压缩或解压数据: 数据
+
+		刷新缓冲区，返回数据 ， 解压数据可以不需要调用，但如果需要验证数据是否完成可以调用
+
+			(DeflateObject|InflateObject):end (string) return string([nil 或 解(压)缩后数据]) , error(错误代码)
+
+常量:
 		zlib.constants {
 
 		刷新方式: （flush）
