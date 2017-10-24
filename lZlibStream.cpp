@@ -4,6 +4,11 @@
 #include "ZlibStream.h"
 #include "lGZStream.h"
 
+struct LZStream {
+	ZBase *stream;
+	int index;
+};
+
 struct EnumPair{
 	const char *name;
 	int value;
@@ -60,34 +65,34 @@ public:
 
 	static const Deflate::DeflateOptions defaultDeflateOptions;
 
-	static Deflate::DeflateOptions extends_tableToDeflateOptions(lua_State *L) {
+	static Deflate::DeflateOptions extends_tableToDeflateOptions(lua_State *L , int index) {
 		Deflate::DeflateOptions op = {0};
 
 		int b = lua_gettop(L);
 
-		lua_getfield(L, -1, "level"); 
+		lua_getfield(L, index, "level"); 
 		op.level = luaL_optinteger(L, -1 , defaultDeflateOptions.level);
 
-		lua_getfield(L, -1, "method"); 
+		lua_getfield(L, index, "method"); 
 		op.method = luaL_optinteger(L, -1 , defaultDeflateOptions.method);
 
-		lua_getfield(L, -1, "windowBits"); 
+		lua_getfield(L, index, "windowBits"); 
 		op.windowBits = luaL_optinteger(L, -1 , defaultDeflateOptions.windowBits);
 
-		lua_getfield(L, -1, "memLevel"); 
+		lua_getfield(L, index, "memLevel"); 
 		op.memLevel = luaL_optinteger(L, -1 , defaultDeflateOptions.memLevel);
 
-		lua_getfield(L, -1, "strategy"); 
+		lua_getfield(L, index, "strategy"); 
 		op.strategy = luaL_optinteger(L, -1 , defaultDeflateOptions.strategy);
 
 		lua_getfield(L, -1, "memory"); 
 		op.memory = luaL_optinteger(L, -1 , defaultDeflateOptions.memory);
 		op.omemory = op.memory;
 
-		lua_getfield(L, -1, "flushmask"); 
+		lua_getfield(L, index, "flushmask"); 
 		op.flushmask = luaL_optinteger(L, -1 , defaultDeflateOptions.flushmask);
 
-		lua_getfield(L, -1, "finishflushmask"); 
+		lua_getfield(L, index, "finishflushmask"); 
 		op.finishflushmask = luaL_optinteger(L, -1 , defaultDeflateOptions.finishflushmask);
 
 		int e = lua_gettop(L);
@@ -98,21 +103,21 @@ public:
 
 	static const Inflate::InflateOptions defaultInflateOptions;
 
-	static Inflate::InflateOptions extends_tableToInflateOptions(lua_State *L) {
+	static Inflate::InflateOptions extends_tableToInflateOptions(lua_State *L , int index) {
 		Inflate::InflateOptions op = {0};
 
 		int b = lua_gettop(L);
 
-		lua_getfield(L, -1, "windowBits"); 
+		lua_getfield(L, index, "windowBits"); 
 		op.windowBits = luaL_optinteger(L, -1 , defaultInflateOptions.windowBits);
-		lua_getfield(L, -1, "memory"); 
+		lua_getfield(L, index, "memory"); 
 		op.memory = luaL_optinteger(L, -1 , defaultInflateOptions.memory);
 		op.omemory = op.memory;
 
-		lua_getfield(L, -1, "flushmask"); 
+		lua_getfield(L, index, "flushmask"); 
 		op.flushmask = luaL_optinteger(L, -1 , defaultInflateOptions.flushmask);
 
-		lua_getfield(L, -1, "finishflushmask"); 
+		lua_getfield(L, index, "finishflushmask"); 
 		op.finishflushmask = luaL_optinteger(L, -1 , defaultInflateOptions.finishflushmask);
 		
 		int e = lua_gettop(L);
@@ -122,16 +127,18 @@ public:
 	}
 public:
 	static int destroy(lua_State *L) {
-		ZBase **stream = 
-		reinterpret_cast<ZBase**>(luaL_checkudata(L, -1, lZlibStream::zlibname));
-		delete *stream;
+		LZStream *ppStream =
+		reinterpret_cast<LZStream*>(luaL_checkudata(L, 1, lZlibStream::zlibname));
+		luaL_unref(L, LUA_REGISTRYINDEX, ppStream->index);
+		delete ppStream->stream;
 		return 0;
 	}
 
 	static int tostring(lua_State *L) {
-		ZBase **stream = 
-		reinterpret_cast<ZBase**>(luaL_checkudata(L, -1, lZlibStream::zlibname));
-		ZBase *tstream = *stream;
+		LZStream *ppStream =
+		reinterpret_cast<LZStream*>(luaL_checkudata(L, 1, lZlibStream::zlibname));
+
+		ZBase *tstream = ppStream->stream;
 		size_t t = tstream->getStream().type;
 		lua_pushstring(L, t == ZlibStream::StreamType::Def ? 
 					"zlib-stream: Deflate" : "zlib-stream: Inflate");
@@ -139,130 +146,169 @@ public:
 	}
 
 	static int write(lua_State *L) {
-		ZBase **stream = 
-		reinterpret_cast<ZBase**>(luaL_checkudata(L, 1, lZlibStream::zlibname));
-		ZBase *wstream = *stream;
+		LZStream *ppStream =
+		reinterpret_cast<LZStream*>(luaL_checkudata(L, 1, lZlibStream::zlibname));
+
+		ZBase *wstream = ppStream->stream;
+		int ref = ppStream->index;
 
 		size_t len = 0;
 		const char *buf = luaL_checklstring(L, 2, &len);
-		
-		bool ctable = false;
-		ssize_t err = wstream->write(buf, len, [L , &ctable](const ZlibStream::Buffer &buffer , ssize_t err) -> ssize_t {
+
+		int btop = lua_gettop(L);
+		lua_rawgeti(L, LUA_REGISTRYINDEX, ref);
+		lua_getfield(L, -1, "ondata");
+		int absindex = lua_absindex(L, -1);
+		lua_getfield(L, -2, "onend");
+		int absindexend = lua_absindex(L, -1);
+
+		ssize_t err = wstream->write(buf , len , [L , absindex , absindexend](const ZlibStream::Buffer &buffer , ssize_t err) -> ssize_t {
+			ssize_t ret = buffer.size();
+			ssize_t args = 2;
+			lua_pushvalue(L, err == Z_STREAM_END ? absindexend : absindex);
+			lua_pushvalue(L, 1);
 
 			if ((err == Z_OK || err == Z_STREAM_END)) {
-				if (!ctable) {
-					lua_newtable(L);
-					ctable = true;
-				}
+				lua_pushnil(L);
 				lua_pushlstring(L, buffer.data(), buffer.size());
-				lua_rawseti(L, -2, lua_rawlen(L, -2) + 1);
-				return buffer.size();
+				args = 3;
+			} else {
+				lua_pushinteger(L, err);
+				ret = -1;
 			}
-
-			return -1;
+			
+			lua_pcall(L, args, 0, 0);
+			return ret;
 		});
 
-		if (!ctable) {
-			lua_pushnil(L);
-		}
+		int etop = lua_gettop(L);
 
-		lua_pushinteger(L, err);
-		return 2;
+		lua_pop(L, etop - btop);
+		return 0;
 	}
 
 	static int flush(lua_State *L) {
-		ZBase **stream = 
-		reinterpret_cast<ZBase**>(luaL_checkudata(L, 1, lZlibStream::zlibname));
-		ZBase *fstream = *stream;
+		LZStream *ppStream =
+		reinterpret_cast<LZStream*>(luaL_checkudata(L, 1, lZlibStream::zlibname));
+
+		ZBase *fstream = ppStream->stream;
+		int ref = ppStream->index;
 
 		size_t t = fstream->getStream().type;
 		ssize_t kind = luaL_optinteger(L, 2, Z_FULL_FLUSH);
 		
-		bool ctable = false;
-		ssize_t err = fstream->flush(kind , [L , &ctable](const ZlibStream::Buffer &buffer , ssize_t err) -> ssize_t {
+		int btop = lua_gettop(L);
+		lua_rawgeti(L, LUA_REGISTRYINDEX, ref);
+		lua_getfield(L, -1, "ondata");
+		int absindex = lua_absindex(L, -1);
+		lua_getfield(L, -2, "onend");
+		int absindexend = lua_absindex(L, -1);
 
+		ssize_t err = fstream->flush(kind, [L , absindex , absindexend](const ZlibStream::Buffer &buffer , ssize_t err) -> ssize_t {
+			ssize_t ret = buffer.size();
+			ssize_t args = 2;
+			lua_pushvalue(L, err == Z_STREAM_END ? absindexend : absindex);
+			lua_pushvalue(L, 1);
 			if ((err == Z_OK || err == Z_STREAM_END)) {
-				if (!ctable) {
-					lua_newtable(L);
-					ctable = true;
-				}
+				lua_pushnil(L);
 				lua_pushlstring(L, buffer.data(), buffer.size());
-				lua_rawseti(L, -2, lua_rawlen(L, -2) + 1);
-				return buffer.size();
+				args = 3;
+			} else {
+				lua_pushinteger(L, err);
+				ret = -1;
 			}
-
-			return -1;
+			
+			lua_pcall(L, args, 0, 0);
+			return ret;
 		});
 
-		if (!ctable) {
-			lua_pushnil(L);
-		}
+		int etop = lua_gettop(L);
 
-		lua_pushinteger(L, err);
-		return 2;
+		lua_pop(L, etop - btop);
+		return 0;
 	}
 
 	static int end(lua_State *L) {
-		ZBase **stream = 
-		reinterpret_cast<ZBase**>(luaL_checkudata(L, 1, lZlibStream::zlibname));
-		ZBase *estream = *stream;
+		LZStream *ppStream =
+		reinterpret_cast<LZStream*>(luaL_checkudata(L, 1, lZlibStream::zlibname));
+
+		ZBase *fstream = ppStream->stream;
+		int ref = ppStream->index;
 
 		size_t len = 0;
 		const char *buf = luaL_optlstring(L, 2, nullptr, &len);
 		
-		bool ctable = false;
-		ssize_t err = estream->end(buf, len, [L , &ctable](const ZlibStream::Buffer &buffer , ssize_t err) -> ssize_t {
+		int btop = lua_gettop(L);
+		lua_rawgeti(L, LUA_REGISTRYINDEX, ref);
+		lua_getfield(L, -1, "ondata");
+		int absindex = lua_absindex(L, -1);
+		lua_getfield(L, -2, "onend");
+		int absindexend = lua_absindex(L, -1);
 
+		ssize_t err = fstream->end(buf, len, [L , absindex , absindexend](const ZlibStream::Buffer &buffer , ssize_t err) -> ssize_t {
+			ssize_t ret = buffer.size();
+			ssize_t args = 2;
+			lua_pushvalue(L, err == Z_STREAM_END ? absindexend : absindex);
+			lua_pushvalue(L, 1);
 			if ((err == Z_OK || err == Z_STREAM_END)) {
-				if (!ctable) {
-					lua_newtable(L);
-					ctable = true;
-				}
+				lua_pushnil(L);
 				lua_pushlstring(L, buffer.data(), buffer.size());
-				lua_rawseti(L, -2, lua_rawlen(L, -2) + 1);
-				return buffer.size();
+				args = 3;
+			} else {
+				lua_pushinteger(L, err);
+				ret = -1;
 			}
-
-			return -1;
+			
+			lua_pcall(L, args, 0, 0);
+			return ret;
 		});
 
-		if (!ctable) {
-			lua_pushnil(L);
-		}
+		int etop = lua_gettop(L);
 
-		lua_pushinteger(L, err);
-		return 2;
+		lua_pop(L, etop - btop);
+		return 0;
 	}
 
 	static int createDeflate(lua_State *L) {
-		ZBase **stream = 
-		reinterpret_cast<ZBase**>(lua_newuserdata(L, sizeof(ZBase**)));
+
+		if (!lua_istable(L, 1)) {
+			lua_pushnil(L);
+			return 1;
+		}
+
+		lua_pushvalue(L, 1);
+		int ref = luaL_ref(L, LUA_REGISTRYINDEX);
 
 		Deflate::DeflateOptions nop = defaultDeflateOptions;
-
-
-		if (lua_istable(L, -1)) {
-			nop = extends_tableToDeflateOptions(L);
+		if (lua_istable(L, 2)) {
+			nop = extends_tableToDeflateOptions(L , 2);
 		}
 		
-		*stream = new Deflate(nop);
-
+		LZStream *pStream = reinterpret_cast<LZStream*>(lua_newuserdata(L, sizeof(LZStream*)));
+		pStream->stream = new Deflate(nop);
+		pStream->index = ref;
 		luaL_getmetatable(L, lZlibStream::zlibname);
 		lua_setmetatable(L, -2);
 		return 1;
 	}
 
 	static int createInflate(lua_State *L) {
-		ZBase **stream = 
-			reinterpret_cast<ZBase**>(lua_newuserdata(L, sizeof(ZBase**)));
-
-		Inflate::InflateOptions nop = defaultInflateOptions;
-
-		if (lua_istable(L, -1)) {
-			nop = extends_tableToInflateOptions(L);
+		if (!lua_istable(L, 1)) {
+			lua_pushnil(L);
+			return 1;
 		}
 
-		*stream = new Inflate(nop);
+		lua_pushvalue(L, 1);
+		int ref = luaL_ref(L, LUA_REGISTRYINDEX);
+
+		Inflate::InflateOptions nop = defaultInflateOptions;
+		if (lua_istable(L, 2)) {
+			nop = extends_tableToInflateOptions(L , 2);
+		}
+
+		LZStream *pStream = reinterpret_cast<LZStream*>(lua_newuserdata(L, sizeof(LZStream*)));
+		pStream->stream = new Inflate(nop);
+		pStream->index = ref;
 
 		luaL_getmetatable(L, lZlibStream::zlibname);
 		lua_setmetatable(L, -2);
