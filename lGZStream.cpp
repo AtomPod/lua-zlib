@@ -277,7 +277,10 @@ static int set3params(gzFile file , lua_State *L) {
  					lua_Number n = 0;
  					dest = readToNumber(L , *lfile , smallbuffer , 
  									sizeof(smallbuffer) , n);
- 					return dest == nullptr ? 0 : 1;
+ 					if (dest == nullptr) {
+ 						lua_pushstring(L, "gzlib-read: invalid number");
+ 					}
+ 					return dest == nullptr ? 1 : 2;
  				}
 
  				default: {
@@ -368,7 +371,7 @@ static int set3params(gzFile file , lua_State *L) {
  		return 0;
  	}
 
- 	int pos = (*whencestr) + (*whencestr + 1) + (*whencestr + 2);
+ 	int pos = (*whencestr) + *(whencestr + 1) + *(whencestr + 2);
  	switch(pos) {
  		case lGZStream::seek_beg:
  			whence = SEEK_SET;
